@@ -3,7 +3,7 @@
 from config import TICKERS, START_DATE, CAPITAL_PER_INDEX, RISK_FREE_RATE
 from data.fetcher import fetch_all
 from engine.backtest import BacktestEngine, run_buy_and_hold
-from metrics.performance import compute_metrics, compute_buy_and_hold_cagr
+from metrics.performance import compute_metrics
 from strategies.registry import get_all_strategies
 
 
@@ -21,10 +21,10 @@ def main():
 
         df = data[ticker]
 
-        # Buy-and-hold benchmark
-        bah_cagr = compute_buy_and_hold_cagr(df, CAPITAL_PER_INDEX, warmup=max_warmup)
+        # Buy-and-hold benchmark — derive baseline CAGR from B&H equity curve
         bah_result = run_buy_and_hold(ticker, df, CAPITAL_PER_INDEX, RISK_FREE_RATE, warmup=max_warmup)
-        bah_metrics = compute_metrics(bah_result, bah_cagr, RISK_FREE_RATE)
+        bah_metrics = compute_metrics(bah_result, None, RISK_FREE_RATE)
+        bah_cagr = bah_metrics.cagr
 
         # Run all strategies
         best_sharpe = None

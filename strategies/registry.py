@@ -379,9 +379,6 @@ def get_all_strategies() -> list[Strategy]:
     # 48. SMA Cross 10/30 (faster crossover)
     strategies.append(SMACrossoverStrategy(10, 30))
 
-    # 49. SMA Cross 20/100 (medium crossover)
-    strategies.append(SMACrossoverStrategy(20, 100))
-
     # 50. SMA Cross 10/30 AND RSI > 30
     strategies.append(ComboStrategy(
         strategies=[SMACrossoverStrategy(10, 30), RSIThresholdStrategy(14, 30)],

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws ecr *)",
+      "Bash(docker login *)",
+      "Bash(docker build *)",
+      "Bash(docker tag *)",
+      "Bash(docker push *)",
+      "Bash(aws lambda *)",
+      "Bash(aws events *)"
+    ]
+  }
+}

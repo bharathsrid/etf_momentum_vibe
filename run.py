@@ -7,7 +7,7 @@ import sys
 from config import TICKERS, START_DATE, END_DATE, CAPITAL_PER_INDEX, RISK_FREE_RATE, OUTPUT_DIR
 from data.fetcher import fetch_all
 from engine.backtest import BacktestEngine, run_buy_and_hold
-from metrics.performance import compute_metrics, compute_buy_and_hold_cagr, compute_aggregate_metrics
+from metrics.performance import compute_metrics, compute_aggregate_metrics
 from reporting.tables import print_summary_table, print_top_strategies, print_best_per_index
 from reporting.plots import generate_all_plots
 from reporting.export import export_to_csv, export_to_excel
@@ -81,12 +81,14 @@ def main():
     # Compute max warmup for fair buy-and-hold comparison
     max_warmup = max(s.warmup for s in strategies)
 
-    # Compute buy-and-hold CAGRs and results
+    # Run buy-and-hold (with the same warmup-as-cash treatment used by strategies),
+    # then derive its CAGR from the same compute_metrics path strategies use.
+    # This makes the alpha baseline identical to the B&H row in the output table.
     for ticker, df in data.items():
-        bah_cagr = compute_buy_and_hold_cagr(df, CAPITAL_PER_INDEX, warmup=max_warmup)
-        buy_and_hold_cagrs[ticker] = bah_cagr
         bah_result = run_buy_and_hold(ticker, df, CAPITAL_PER_INDEX, RISK_FREE_RATE, warmup=max_warmup)
         buy_and_hold_results[ticker] = bah_result
+        bah_metrics = compute_metrics(bah_result, None, RISK_FREE_RATE)
+        buy_and_hold_cagrs[ticker] = bah_metrics.cagr
 
     # Run each strategy for each ticker
     for si, strategy in enumerate(strategies):
@@ -115,25 +117,49 @@ def main():
     # 4. Compute aggregate metrics
     print("\n[4/6] Computing aggregate portfolio metrics...")
     aggregate_metrics = []
-    agg_bah_cagr = sum(buy_and_hold_cagrs.values()) / len(buy_and_hold_cagrs)
 
-    # Track total trades per strategy for aggregate
+    # Track total trades and round-trip wins per strategy for aggregate
     strategy_total_trades = {}
-    for m in all_metrics:
-        if m.strategy_name not in strategy_total_trades:
-            strategy_total_trades[m.strategy_name] = 0
-        strategy_total_trades[m.strategy_name] += m.num_trades
+    strategy_round_trips = {}
+    strategy_round_trip_wins = {}
+    for strategy_name, ticker_results in per_strategy_results.items():
+        total_trades = 0
+        total_round_trips = 0
+        total_wins = 0
+        for ticker, res in ticker_results.items():
+            total_trades += len(res.trades)
+            buy_price = None
+            for t in res.trades:
+                if t.action == "BUY":
+                    buy_price = t.price
+                elif t.action == "SELL" and buy_price is not None:
+                    total_round_trips += 1
+                    if t.price > buy_price:
+                        total_wins += 1
+                    buy_price = None
+            if buy_price is not None and len(res.equity_curve) > 0:
+                total_round_trips += 1
+                if res.equity_curve.iloc[-1] > buy_price:
+                    total_wins += 1
+        strategy_total_trades[strategy_name] = total_trades
+        strategy_round_trips[strategy_name] = total_round_trips
+        strategy_round_trip_wins[strategy_name] = total_wins
+
+    # Aggregate B&H first so we can use its true CAGR as the alpha baseline
+    bah_eq_curves = {ticker: buy_and_hold_results[ticker].equity_curve for ticker in data}
+    bah_agg = compute_aggregate_metrics(bah_eq_curves, "Buy & Hold", None, RISK_FREE_RATE)
+    agg_bah_cagr = bah_agg.cagr
+    bah_agg.alpha = 0.0
 
     for strategy_name, eq_curves in per_strategy_equity_curves.items():
         agg_metrics = compute_aggregate_metrics(
             eq_curves, strategy_name, agg_bah_cagr, RISK_FREE_RATE
         )
         agg_metrics.num_trades = strategy_total_trades.get(strategy_name, 0)
+        rt = strategy_round_trips.get(strategy_name, 0)
+        agg_metrics.win_rate = (strategy_round_trip_wins.get(strategy_name, 0) / rt) if rt > 0 else 0.0
         aggregate_metrics.append(agg_metrics)
 
-    # Add buy-and-hold aggregate
-    bah_eq_curves = {ticker: buy_and_hold_results[ticker].equity_curve for ticker in data}
-    bah_agg = compute_aggregate_metrics(bah_eq_curves, "Buy & Hold", agg_bah_cagr, RISK_FREE_RATE)
     aggregate_metrics.append(bah_agg)
 
     # 5. Print results

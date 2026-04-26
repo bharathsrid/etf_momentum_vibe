@@ -92,10 +92,10 @@ def compute_metrics(
     else:
         sharpe_ratio = 0.0
 
-    # Sortino ratio (downside deviation only)
-    downside_returns = excess_returns[excess_returns < 0]
-    if len(downside_returns) > 1:
-        downside_dev = downside_returns.std() * np.sqrt(252)
+    # Sortino ratio: RMS of min(excess, 0) over the FULL sample
+    if len(excess_returns) > 1:
+        downside = excess_returns.clip(upper=0.0)
+        downside_dev = np.sqrt((downside ** 2).mean()) * np.sqrt(252)
         sortino_ratio = (excess_returns.mean() * 252) / downside_dev if downside_dev > 0 else 0.0
     else:
         sortino_ratio = 0.0

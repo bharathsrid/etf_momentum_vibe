@@ -65,12 +65,23 @@ class BacktestEngine:
             portfolio.mark_to_market(close, date)
             portfolio.apply_daily_cash_interest()
 
-        # Main backtest loop: start generating signals after warmup
+        # Main backtest loop: start generating signals after warmup.
+        # Order per iteration i: mark-to-market with current (pre-trade) state,
+        # then compute signal at close[i], then execute at open[i+1] which only
+        # affects future iterations.
         for i in range(warmup, n):
-            # 1. Generate signal using data up to and including day i
+            # 1. Mark to market at close[i] with the position held during day i
+            close = self.data["Close"].iloc[i]
+            date = self.data.index[i]
+            portfolio.mark_to_market(close, date)
+
+            # 2. Accrue interest on cash for day i
+            portfolio.apply_daily_cash_interest()
+
+            # 3. Generate signal using data up to and including day i
             signal = self.strategy.signal(self.data.iloc[: i + 1])
 
-            # 2. Execute at T+1 open if signal changed
+            # 4. Execute at T+1 open if signal differs from current state
             if i + 1 < n:
                 execution_price = self.data["Open"].iloc[i + 1]
                 execution_date = self.data.index[i + 1]
@@ -79,14 +90,6 @@ class BacktestEngine:
                     portfolio.go_long(execution_price, execution_date)
                 elif signal == Signal.CASH and portfolio.is_invested:
                     portfolio.go_cash(execution_price, execution_date)
-
-            # 3. Mark to market using today's close
-            close = self.data["Close"].iloc[i]
-            date = self.data.index[i]
-            portfolio.mark_to_market(close, date)
-
-            # 4. Accrue interest on cash
-            portfolio.apply_daily_cash_interest()
 
         equity_curve = portfolio.get_equity_curve()
         final_equity = equity_curve.iloc[-1] if len(equity_curve) > 0 else self.initial_cash
