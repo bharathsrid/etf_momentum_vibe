@@ -7,7 +7,16 @@
       "Bash(docker tag *)",
       "Bash(docker push *)",
       "Bash(aws lambda *)",
-      "Bash(aws events *)"
+      "Bash(aws events *)",
+      "Bash(aws --version)",
+      "Bash(aws sts *)",
+      "Bash(aws --profile nshq sts get-caller-identity)",
+      "Bash(aws --profile nshq lambda get-function --function-name momentum-daily-check --region us-east-1 --query 'Configuration.[PackageType,Role,LastModified]' --output json)",
+      "Bash(aws --profile nshq events list-rule-names-by-target --target-arn arn:aws:lambda:us-east-1:939547497912:function:momentum-daily-check --region us-east-1)",
+      "Bash(aws --profile nshq events describe-rule --name momentum-daily-check-schedule --region us-east-1)",
+      "Bash(aws --profile nshq ses list-identities --region us-east-1)",
+      "Bash(aws *)",
+      "Bash(docker --version)"
     ]
   }
 }

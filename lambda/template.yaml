@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ETF momentum daily signal email. Runs Mon-Fri at 22:00 UTC,
+  pulls 18 months of Yahoo Finance OHLC for S&P 500, FTSE 100,
+  Nifty 50, and STOXX 50, evaluates the best-per-index strategies
+  and emails the report via SES.
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Default: sridharanbharath@gmail.com
+    Description: SES-verified sender address.
+  Recipients:
+    Type: CommaDelimitedList
+    Default: sridharanbharath@gmail.com,x14hsridh@gmail.com,bharathsuk9@gmail.com,bharath.s@outlook.com
+    Description: Comma-separated SES-verified recipient addresses.
+
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 1024
+
+Resources:
+  EtfSignalsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: etf-signals-daily
+      Description: Daily ETF momentum signal email
+      PackageType: Image
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          SENDER_EMAIL: !Ref SenderEmail
+          RECIPIENTS: !Join [",", !Ref Recipients]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+                - ses:GetIdentityVerificationAttributes
+              Resource: "*"
+      Events:
+        WeekdayEvening:
+          Type: Schedule
+          Properties:
+            Name: etf-signals-daily-schedule
+            Schedule: cron(0 22 ? * MON-FRI *)
+            Description: Mon-Fri 22:00 UTC — daily ETF momentum signal email after US market close.
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: latest
+
+Outputs:
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt EtfSignalsFunction.Arn
+  FunctionName:
+    Description: Lambda function name
+    Value: !Ref EtfSignalsFunction

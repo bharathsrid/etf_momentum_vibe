@@ -1,0 +1,19 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "etf-signals-daily"
+region = "us-east-1"
+profile = "nshq"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+resolve_s3 = true
+resolve_image_repos = true
+image_repositories = []
+parameter_overrides = "Recipients=\"sridharanbharath@gmail.com,x14hsridh@gmail.com,bharathsuk9@gmail.com,bharath.s@outlook.com\""
+
+[default.validate.parameters]
+profile = "nshq"
+
+[default.build.parameters]
+cached = true
+parallel = true

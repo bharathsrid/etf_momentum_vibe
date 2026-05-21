@@ -13,12 +13,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-SES_REGION = "us-east-1"
-FROM_ADDR = "noreply@dart-cap.com"
-TO_ADDRS = [
-    "sridharanbharath@gmail.com",
-    "dartconsultants.hyd@gmail.com",
-]
+SES_REGION = os.environ.get("AWS_REGION", "us-east-1")
+FROM_ADDR = os.environ["SENDER_EMAIL"]
+TO_ADDRS = [r.strip() for r in os.environ["RECIPIENTS"].split(",") if r.strip()]
 
 TICKERS = {
     "^GSPC": "S&P 500",
@@ -293,13 +290,30 @@ def build_report() -> tuple[str, str]:
     return text, html
 
 
+def _verified_recipients(ses, candidates: list[str]) -> tuple[list[str], list[str]]:
+    """Filter candidates against SES verified identities (needed in sandbox mode)."""
+    attrs = ses.get_identity_verification_attributes(Identities=candidates).get(
+        "VerificationAttributes", {}
+    )
+    verified, skipped = [], []
+    for addr in candidates:
+        if attrs.get(addr, {}).get("VerificationStatus") == "Success":
+            verified.append(addr)
+        else:
+            skipped.append(addr)
+    return verified, skipped
+
+
 def lambda_handler(event, context):
     text, html = build_report()
     subject = f"ETF Momentum signals — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     ses = boto3.client("ses", region_name=SES_REGION)
+    to_addrs, skipped = _verified_recipients(ses, TO_ADDRS)
+    if not to_addrs:
+        return {"status": "skipped", "reason": "no verified recipients", "skipped": skipped}
     resp = ses.send_email(
         Source=FROM_ADDR,
-        Destination={"ToAddresses": TO_ADDRS},
+        Destination={"ToAddresses": to_addrs},
         Message={
             "Subject": {"Data": subject, "Charset": "UTF-8"},
             "Body": {
@@ -308,7 +322,12 @@ def lambda_handler(event, context):
             },
         },
     )
-    return {"status": "ok", "message_id": resp.get("MessageId"), "to": TO_ADDRS}
+    return {
+        "status": "ok",
+        "message_id": resp.get("MessageId"),
+        "to": to_addrs,
+        "skipped": skipped,
+    }
 
 
 if __name__ == "__main__":
