@@ -311,21 +311,32 @@ def lambda_handler(event, context):
     to_addrs, skipped = _verified_recipients(ses, TO_ADDRS)
     if not to_addrs:
         return {"status": "skipped", "reason": "no verified recipients", "skipped": skipped}
-    resp = ses.send_email(
-        Source=FROM_ADDR,
-        Destination={"ToAddresses": to_addrs},
-        Message={
-            "Subject": {"Data": subject, "Charset": "UTF-8"},
-            "Body": {
-                "Text": {"Data": text, "Charset": "UTF-8"},
-                "Html": {"Data": html, "Charset": "UTF-8"},
-            },
+    message = {
+        "Subject": {"Data": subject, "Charset": "UTF-8"},
+        "Body": {
+            "Text": {"Data": text, "Charset": "UTF-8"},
+            "Html": {"Data": html, "Charset": "UTF-8"},
         },
-    )
+    }
+    # One message per recipient: a single mail addressed to many is a bulk signal
+    # (Gmail filtered the multi-recipient digest) and leaks addresses to each other.
+    message_ids, failed = [], []
+    for addr in to_addrs:
+        try:
+            resp = ses.send_email(
+                Source=FROM_ADDR,
+                Destination={"ToAddresses": [addr]},
+                Message=message,
+            )
+            message_ids.append(resp.get("MessageId"))
+        except Exception as e:
+            print(f"Failed to send to {addr}: {e}")
+            failed.append(addr)
     return {
-        "status": "ok",
-        "message_id": resp.get("MessageId"),
-        "to": to_addrs,
+        "status": "ok" if message_ids else "error",
+        "message_ids": message_ids,
+        "to": [a for a in to_addrs if a not in failed],
+        "failed": failed,
         "skipped": skipped,
     }
 

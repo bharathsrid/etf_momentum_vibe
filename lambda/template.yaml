@@ -9,7 +9,7 @@ Description: >
 Parameters:
   SenderEmail:
     Type: String
-    Default: sridharanbharath@gmail.com
+    Default: noreply@bharath-agent.fyi
     Description: SES-verified sender address.
   Recipients:
     Type: CommaDelimitedList
